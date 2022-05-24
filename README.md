@@ -20,8 +20,6 @@ Save the data to the file
 # CODE
 ```
 # CODE
-Developed By: THENMOZHI P
-Reg.No: 212221230116
 BOSTON DATASET:
 from sklearn.datasets import load_boston
 import pandas as pd
