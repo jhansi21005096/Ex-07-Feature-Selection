@@ -19,129 +19,115 @@ Save the data to the file
 
 # CODE
 ```
-# CODE
-BOSTON DATASET:
 from sklearn.datasets import load_boston
+
+boston_data=load_boston()
+
 import pandas as pd
-import numpy as np
-import matplotlib
-import matplotlib.pyplot as plt
-import seaborn as sns
-import statsmodels.api as sm
-%matplotlib inline
-from sklearn.model_selection import train_test_split
+
+boston = pd.DataFrame(boston_data.data, columns=boston_data.feature_names)
+boston['MEDV'] = boston_data.target
+dummies = pd.get_dummies(boston.RAD)
+boston = boston.drop(columns='RAD').merge(dummies,left_index=True,right_index=True)
+X = boston.drop(columns='MEDV')
+y = boston.MEDV
+
+boston.head(10)
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.model_selection import KFold
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.model_selection import cross_val_predict
 from sklearn.linear_model import LinearRegression
-from sklearn.feature_selection import RFE
-from sklearn.linear_model import RidgeCV, LassoCV, Ridge, Lasso
+from math import sqrt
 
-x = load_boston()
-df = pd.DataFrame(x.data, columns = x.feature_names)
-df["PRICE"] = x.target
-X = df.drop("PRICE",1) 
-y = df["PRICE"]          
-df.head(10)
+cv = KFold(n_splits=10, random_state=0, shuffle=True)
+classifier_pipeline = make_pipeline(StandardScaler(), KNeighborsRegressor(n_neighbors=10))
+y_pred = cross_val_predict(classifier_pipeline, X, y, cv=cv)
+print("RMSE: " + str(round(sqrt(mean_squared_error(y,y_pred)),2)))
+print("R_squared: " + str(round(r2_score(y,y_pred),2)))
 
-plt.figure(figsize=(12,10))
-cor = df.corr()
-sns.heatmap(cor, annot=True, cmap=plt.cm.Reds)
+boston.var()
+
+X = X.drop(columns = ['NOX','CHAS'])
+
+y_pred = cross_val_predict(classifier_pipeline, X, y, cv=cv)
+print("RMSE: " + str(round(sqrt(mean_squared_error(y,y_pred)),2)))
+print("R_squared: " + str(round(r2_score(y,y_pred),2)))
+
+import seaborn as sn
+import matplotlib.pyplot as plt
+
+fig_dims = (10, 6)
+fig, ax = plt.subplots(figsize=fig_dims)
+sn.heatmap(boston.corr(), ax=ax,cmap="Blues")
 plt.show()
 
-cor_target = abs(cor["PRICE"])
-relevant_features = cor_target[cor_target>0.5]
-relevant_features
+abs(boston.corr()["MEDV"])
 
-print(df[["LSTAT","PTRATIO"]].corr())
-print(df[["RM","LSTAT"]].corr())
-print(df[["RM","PTRATIO"]].corr())
-print(df[["PRICE","PTRATIO"]].corr())
+abs(boston.corr()["MEDV"][abs(boston.corr()["MEDV"])>0.5].drop('MEDV')).index.tolist()
 
-X_1 = sm.add_constant(X)
-model = sm.OLS(y,X_1).fit()
-model.pvalues
+vals = [0.1,0.2,0.3,0.4,0.5]
+for val in vals:
+    features = abs(boston.corr()["MEDV"][abs(boston.corr()["MEDV"])>val].drop('MEDV')).index.tolist()
+    
+    X = boston.drop(columns='MEDV')
+    X=X[features]
+    
+    print(features)
 
-#Backward Elimination
-cols = list(X.columns)
-pmax = 1
-while (len(cols)>0):
-    p= []
-    X_1 = X[cols]
-    X_1 = sm.add_constant(X_1)
-    model = sm.OLS(y,X_1).fit()
-    p = pd.Series(model.pvalues.values[1:],index = cols)      
-    pmax = max(p)
-    feature_with_p_max = p.idxmax()
-    if(pmax>0.05):
-        cols.remove(feature_with_p_max)
-    else:
-        break
-selected_features_BE = cols
-print(selected_features_BE)
+    y_pred = cross_val_predict(classifier_pipeline, X, y, cv=cv)
+    print("RMSE: " + str(round(sqrt(mean_squared_error(y,y_pred)),2)))
+    print("R_squared: " + str(round(r2_score(y,y_pred),2)))
 
-model = LinearRegression()
-#Initializing RFE model
-rfe = RFE(model, 7)
-#Transforming data using RFE
-X_rfe = rfe.fit_transform(X,y)  
-#Fitting the data to model
-model.fit(X_rfe,y)
-print(rfe.support_)
-print(rfe.ranking_)
+boston = pd.DataFrame(boston_data.data, columns=boston_data.feature_names)
+boston['MEDV'] = boston_data.target
+boston['RAD'] = boston['RAD'].astype('category')
+dummies = pd.get_dummies(boston.RAD)
+boston = boston.drop(columns='RAD').merge(dummies,left_index=True,right_index=True)
+X = boston.drop(columns='MEDV')
+y = boston.MEDV
 
-nof_list=np.arange(1,13)            
-high_score=0
-nof=0           
-score_list =[]
-for n in range(len(nof_list)):
-    X_train, X_test, y_train, y_test = train_test_split(X,y, test_size = 0.3, random_state = 0)
-    model = LinearRegression()
-    rfe = RFE(model,nof_list[n])
-    X_train_rfe = rfe.fit_transform(X_train,y_train)
-    X_test_rfe = rfe.transform(X_test)
-    model.fit(X_train_rfe,y_train)
-    score = model.score(X_test_rfe,y_test)
-    score_list.append(score)
-    if(score>high_score):
-        high_score = score
-        nof = nof_list[n]
-print("Optimum number of features: %d" %nof)
-print("Score with %d features: %f" % (nof, high_score))
+from mlxtend.feature_selection import SequentialFeatureSelector as SFS
 
-cols = list(X.columns)
-model = LinearRegression()
-rfe = RFE(model, 10)             
-X_rfe = rfe.fit_transform(X,y)  
-model.fit(X_rfe,y)              
-temp = pd.Series(rfe.support_,index = cols)
-selected_features_rfe = temp[temp==True].index
-print(selected_features_rfe)
+sfs1 = SFS(classifier_pipeline, 
+           k_features=1, 
+           forward=False, 
+           scoring='neg_mean_squared_error',
+           cv=cv)
 
-#3. Embedded Method
-reg = LassoCV()
-reg.fit(X, y)
-print("Best alpha using built-in LassoCV: %f" % reg.alpha_)
-print("Best score using built-in LassoCV: %f" %reg.score(X,y))
-coef = pd.Series(reg.coef_, index = X.columns)
+X = boston.drop(columns='MEDV')
 
-print("Lasso picked " + str(sum(coef != 0)) + " variables and eliminated the other " +  str(sum(coef == 0)) + " variables")
-imp_coef = coef.sort_values()
-import matplotlib
-matplotlib.rcParams['figure.figsize'] = (8.0, 10.0)
-imp_coef.plot(kind = "barh")
-plt.title("Feature importance using Lasso Model")
+sfs1.fit(X,y)
+
+sfs1.subsets_
+
+X = boston.drop(columns='MEDV')[['CRIM','RM','PTRATIO','LSTAT']]
+y = boston['MEDV']
+y_pred = cross_val_predict(classifier_pipeline, X, y, cv=cv)
+print("RMSE: " + str(round(sqrt(mean_squared_error(y,y_pred)),3)))
+print("R_squared: " + str(round(r2_score(y,y_pred),3)))
+
+boston[['CRIM','RM','PTRATIO','LSTAT','MEDV']].corr()
+
+X = boston.drop(columns='MEDV')[['CRIM','RM','PTRATIO','LSTAT']]
+y = boston['MEDV']
+y_pred = cross_val_predict(classifier_pipeline, X, y, cv=cv)
+print("RMSE: " + str(round(sqrt(mean_squared_error(y,y_pred)),3)))
+print("R_squared: " + str(round(r2_score(y,y_pred),3)))
+
+sn.pairplot(boston[['CRIM','RM','PTRATIO','LSTAT']])
 ```
-
 # OUTPUT
-![output](output1.png)
-![output](output2.png)
-![output](output3.png)
-![output](output4.png)
-![output](output5.png)
-![output](output6.png)
-![output](output7.png)
-![output](output8.png)
-![output](output9.png)
-![output](output10.png)
-![output](output11.png)
+![output](outputa1.png)
+![output](outputa2.png)
+![output](outputa3.png)
+![output](outputa4.png)
+![output](outputa5.png)
+![output](outputa6.png)
+![output](outputa7.png)
 
 # Result
 Various feature selection techniques have been performed on a given dataset successfully.
